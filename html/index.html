@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Controle Carrinho</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <h1>Controle do Carrinho</h1>
+    <div id="inicial">
+        <label>Broker MQTT (WebSocket): <input id="broker" value="wss://broker.hivemq.com:8000/mqtt" style="width:320px"></label>
+    </div>
+    <p></p>
+    <div class="pad">
+        <div></div>
+        <button onclick="send('forward')">↑</button>
+        <div></div>
+        <button onclick="send('left')">←</button>
+        <button class="big" onclick="send('stop')">STOP</button>
+        <button onclick="send('right')">→</button>
+        <div></div>
+        <button onclick="send('back')">↓</button>
+        <div></div>
+         
+    </div> 
+ <p id="status">Desconectado</p>
+
+  <!-- MQTT.js via CDN -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+    // tópico público (adicione um sufixo único se quiser evitar mexer na mesma fila)
+    const clientId = 'carrinho_' + Math.random().toString(16).substr(2,8);
+    const topic = 'meuCarrinho/controle'; // se quiser, troque para 'meuUsuario/carrinho1/controle'
+
+    let client = null;
+
+    function connect() {
+      const brokerUrl = document.getElementById('broker').value;
+      if (client) client.end(true);
+      document.getElementById('status').innerText = 'Conectando...';
+      try {
+        client = mqtt.connect(brokerUrl, { clientId, keepalive: 30, clean: true });
+      } catch (e) {
+        document.getElementById('status').innerText = 'Erro ao conectar: ' + e;
+        return;
+      }
+
+      client.on('connect', function () {
+        document.getElementById('status').innerText = 'Conectado ao broker. Tópico: ' + topic;
+        // opcional: se quiser receber feedback do ESP32
+        client.subscribe(topic + '/status', function(){});
+      });
+
+      client.on('reconnect', function(){ document.getElementById('status').innerText = 'Reconectando...'; });
+      client.on('error', function(err){ document.getElementById('status').innerText = 'Erro: ' + err; client.end(); });
+      client.on('close', function(){ document.getElementById('status').innerText = 'Conexão fechada'; });
+      client.on('message', function(t, payload){
+        console.log('msg', t, payload.toString());
+      });
+    }
+
+    function send(cmd) {
+      if (!client || client.disconnected) connect();
+      const payload = JSON.stringify({ cmd, ts: Date.now() });
+      // publica no tópico principal
+      client.publish(topic, payload);
+      console.log('Publicado', payload);
+    }
+
+    // conecta automaticamente ao carregar a página
+    window.addEventListener('load', () => setTimeout(connect, 200));
+  </script>
+</body>
+</html>
